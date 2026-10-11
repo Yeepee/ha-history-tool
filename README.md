@@ -9,10 +9,20 @@ CLI tool to query the Home Assistant History API (`/api/history/period`) and ret
 - Output as JSON or a human-readable summary
 - Read credentials from the environment (no hardcoded secrets)
 
+## Installation
+
+Install from GitHub with `pipx`:
+
+```bash
+pipx install git+https://github.com/Yeepee/ha-history-tool.git
+```
+
 ## Usage
 
 ```bash
-ha-history --entity sensor.outdoor_temperature --start 2026-09-01T00:00:00Z --end 2026-10-01T00:00:00Z
+export HASS_URL="http://127.0.0.1:8123"
+export HASS_TOKEN="eyJh..."
+ha-history --entity sensor.0xd44867fffe111d3c_temperature --start 2026-09-11T00:00:00Z --days 30
 ha-history --entity sensor.temp_1,sensor.temp_2 --start 2026-09-01T00:00:00Z --days 30 --format json
 ```
 
