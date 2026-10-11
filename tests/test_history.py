@@ -37,6 +37,31 @@ class StatsTests(unittest.TestCase):
         self.assertEqual(compute_stats([{"state": "1"}, {"state": "1.6"}])["trend"], "up")
         self.assertEqual(compute_stats([{"state": "2"}, {"state": "1.4"}])["trend"], "down")
 
+    def test_custom_absolute_trend_threshold(self):
+        points = [{"state": "1"}, {"state": "1.6"}]
+        self.assertEqual(compute_stats(points, trend_threshold=0.7)["trend"], "stable")
+        self.assertEqual(compute_stats(points, trend_threshold=0.5)["trend"], "up")
+
+    def test_relative_trend_threshold_uses_value_range(self):
+        points = [{"state": "0"}, {"state": "100"}]
+        self.assertEqual(
+            compute_stats(points, trend_threshold=100, trend_mode="relative")["trend"],
+            "stable",
+        )
+        self.assertEqual(
+            compute_stats(points, trend_threshold=99, trend_mode="relative")["trend"],
+            "up",
+        )
+
+    def test_rejects_invalid_trend_options(self):
+        points = [{"state": "1"}, {"state": "2"}]
+        for threshold in (-0.1, float("inf"), float("nan")):
+            with self.subTest(threshold=threshold):
+                with self.assertRaisesRegex(ValueError, "trend_threshold"):
+                    compute_stats(points, trend_threshold=threshold)
+        with self.assertRaisesRegex(ValueError, "trend_mode"):
+            compute_stats(points, trend_mode="invalid")
+
 
 class ClientTests(unittest.TestCase):
     def test_http_404_is_reported(self):
@@ -91,6 +116,40 @@ class ClientTests(unittest.TestCase):
 
 
 class CLITests(unittest.TestCase):
+    def test_parser_rejects_invalid_trend_options(self):
+        base_args = ["--entity", "sensor.a", "--start", "2026-09-01T00:00:00Z"]
+        invalid_options = [
+            ["--trend-threshold", "-1"],
+            ["--trend-threshold", "nan"],
+            ["--trend-mode", "invalid"],
+        ]
+        for option in invalid_options:
+            with self.subTest(option=option):
+                with redirect_stderr(io.StringIO()):
+                    with self.assertRaises(SystemExit) as error:
+                        __main__.build_parser().parse_args(base_args + option)
+                self.assertEqual(error.exception.code, 1)
+
+    def test_trend_options_are_passed_to_compute_stats(self):
+        with patch.dict(os.environ, {"HASS_URL": "http://homeassistant", "HASS_TOKEN": "eyJtoken"}):
+            with patch.object(HistoryClient, "get_history", return_value={"sensor.a": []}):
+                with patch.object(__main__, "compute_stats", return_value={}) as compute:
+                    with redirect_stdout(io.StringIO()):
+                        result = __main__.main(
+                            [
+                                "--entity",
+                                "sensor.a",
+                                "--start",
+                                "2026-09-01T00:00:00Z",
+                                "--trend-threshold",
+                                "12.5",
+                                "--trend-mode",
+                                "relative",
+                            ]
+                        )
+        self.assertEqual(result, 0)
+        compute.assert_called_once_with([], trend_threshold=12.5, trend_mode="relative")
+
     def test_days_computes_end_relative_to_start(self):
         with patch.dict(os.environ, {"HASS_URL": "http://homeassistant", "HASS_TOKEN": "eyJtoken"}):
             with patch.object(HistoryClient, "get_history", return_value={"sensor.a": []}) as get_history:

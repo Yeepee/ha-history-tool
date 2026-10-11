@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import math
 import os
 import sys
 from datetime import datetime, timedelta, timezone
@@ -25,6 +26,16 @@ def positive_int(value: str) -> int:
     if days <= 0:
         raise argparse.ArgumentTypeError("must be a positive integer")
     return days
+
+
+def non_negative_float(value: str) -> float:
+    try:
+        threshold = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a finite non-negative number") from exc
+    if not math.isfinite(threshold) or threshold < 0:
+        raise argparse.ArgumentTypeError("must be a finite non-negative number")
+    return threshold
 
 
 def parse_utc_datetime(value: str) -> datetime:
@@ -52,6 +63,18 @@ def build_parser() -> argparse.ArgumentParser:
     end_options.add_argument("--end", help="UTC ISO 8601 end time")
     end_options.add_argument("--days", type=positive_int, help="period length in days (default: 30)")
     parser.add_argument("--format", choices=("json", "text"), default="json")
+    parser.add_argument(
+        "--trend-threshold",
+        type=non_negative_float,
+        default=0.5,
+        help="trend threshold (default: 0.5)",
+    )
+    parser.add_argument(
+        "--trend-mode",
+        choices=("absolute", "relative"),
+        default="absolute",
+        help="interpret the trend threshold as an absolute value or percent of the value range",
+    )
     return parser
 
 
@@ -115,7 +138,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         {
             "entity_id": entity_id,
             "points": point_data[entity_id],
-            "stats": compute_stats(point_data[entity_id]),
+            "stats": compute_stats(
+                point_data[entity_id],
+                trend_threshold=args.trend_threshold,
+                trend_mode=args.trend_mode,
+            ),
         }
         for entity_id in entity_ids
     ]

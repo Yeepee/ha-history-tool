@@ -4,8 +4,17 @@ import math
 from typing import Any
 
 
-def compute_stats(points: list[dict[str, Any]]) -> dict[str, int | float | str | None]:
+def compute_stats(
+    points: list[dict[str, Any]],
+    trend_threshold: float = 0.5,
+    trend_mode: str = "absolute",
+) -> dict[str, int | float | str | None]:
     """Compute numeric statistics, ignoring states that cannot be parsed as numbers."""
+    if not math.isfinite(trend_threshold) or trend_threshold < 0:
+        raise ValueError("trend_threshold must be a finite non-negative number")
+    if trend_mode not in ("absolute", "relative"):
+        raise ValueError("trend_mode must be 'absolute' or 'relative'")
+
     values: list[float] = []
     for point in points:
         try:
@@ -32,7 +41,10 @@ def compute_stats(points: list[dict[str, Any]]) -> dict[str, int | float | str |
         if midpoint
         else 0
     )
-    trend = "up" if trend_delta > 0.5 else "down" if trend_delta < -0.5 else "stable"
+    threshold = trend_threshold
+    if trend_mode == "relative":
+        threshold = (max(values) - min(values)) * trend_threshold / 100
+    trend = "up" if trend_delta > threshold else "down" if trend_delta < -threshold else "stable"
 
     return {
         "count": len(values),
